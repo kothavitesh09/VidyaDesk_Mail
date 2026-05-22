@@ -9,7 +9,14 @@ from mailer import configure_mail, send_plain_email
 app = Flask(__name__)
 
 allowed_origin = os.getenv("VIDYADESK_VERCEL_DOMAIN", "https://vidyadesk.vercel.app")
-CORS(app, resources={r"/send-email": {"origins": [allowed_origin]}})
+CORS(
+    app,
+    resources={
+        r"/": {"origins": [allowed_origin]},
+        r"/health": {"origins": [allowed_origin]},
+        r"/send-email": {"origins": [allowed_origin]},
+    },
+)
 
 configure_mail(app)
 
@@ -24,12 +31,20 @@ def _authorized() -> bool:
     return auth_header == f"Bearer {api_key}"
 
 
+@app.get("/")
+def root():
+    return jsonify({"success": True, "message": "VidyaDesk Mail Worker Running"}), 200
+
+
 @app.post("/send-email")
 def send_email():
     if not _authorized():
         return jsonify({"success": False, "error": "Unauthorized"}), 401
 
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "error": "Invalid JSON payload"}), 400
+
     recipient = payload.get("to")
     subject = payload.get("subject")
     body = payload.get("body")
@@ -39,8 +54,9 @@ def send_email():
 
     try:
         send_plain_email(recipient, subject, body)
-        return jsonify({"success": True, "message": "Email sent"}), 200
+        return jsonify({"success": True, "message": "Email sent successfully"}), 200
     except Exception as exc:
+        print(f"Mail send error: {exc}", flush=True)
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
