@@ -1,30 +1,56 @@
 import os
+import requests
 
-from flask_mail import Mail, Message
 
-
-mail = Mail()
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def configure_mail(app):
-    app.config.update(
-        MAIL_SERVER=os.getenv("MAIL_SERVER"),
-        MAIL_PORT=int(os.getenv("MAIL_PORT", "587")),
-        MAIL_USE_TLS=True,
-        MAIL_USE_SSL=False,
-        MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
-        MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
-        MAIL_DEFAULT_SENDER=os.getenv("MAIL_USERNAME"),
+    pass
+
+
+def send_plain_email(recipient: str, subject: str, body: str):
+
+    api_key = os.getenv("BREVO_API_KEY")
+
+    if not api_key:
+        raise RuntimeError("BREVO_API_KEY is not configured")
+
+    sender_email = os.getenv("SENDER_EMAIL")
+
+    if not sender_email:
+        raise RuntimeError("SENDER_EMAIL is not configured")
+
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key,
+        "content-type": "application/json",
+    }
+
+    payload = {
+        "sender": {
+            "name": "VidyaDesk",
+            "email": sender_email,
+        },
+        "to": [
+            {
+                "email": recipient
+            }
+        ],
+        "subject": subject,
+        "textContent": body,
+    }
+
+    response = requests.post(
+        BREVO_API_URL,
+        headers=headers,
+        json=payload,
+        timeout=30,
     )
-    mail.init_app(app)
 
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Brevo API Error: {response.status_code} - {response.text}"
+        )
 
-def send_plain_email(recipient: str, subject: str, body: str) -> None:
-    if not os.getenv("MAIL_SERVER"):
-        raise RuntimeError("MAIL_SERVER must be configured")
-
-    if not os.getenv("MAIL_USERNAME") or not os.getenv("MAIL_PASSWORD"):
-        raise RuntimeError("MAIL_USERNAME and MAIL_PASSWORD must be configured")
-
-    message = Message(subject=subject, recipients=[recipient], body=body)
-    mail.send(message)
+    return response.json()
